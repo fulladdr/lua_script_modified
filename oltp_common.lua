@@ -71,6 +71,8 @@ sysbench.cmdline.options = {
    reconnect =
       {"Reconnect after every N events. The default (0) is to not reconnect",
        0},
+   nested_loop_joins = 
+      {"Newted Loop Join number", 100},
    mysql_storage_engine =
       {"Storage engine, if MySQL is used", "rocksdb"},
    pgsql_variant =
@@ -78,7 +80,7 @@ sysbench.cmdline.options = {
           "PostgreSQL driver. The only currently supported " ..
           "variant is 'redshift'. When enabled, " ..
           "create_secondary is automatically disabled, and " ..
-          "delete_inserts is set to 0"}
+          "delete_inserts is set to 0"},
 }
 
 -- Prepare the dataset. This command supports parallel execution, i.e. will
@@ -276,8 +278,8 @@ local stmt_defs = {
    inserts = {
       "INSERT INTO sbtest%u (id, k, c, pad) VALUES (?, ?, ?, ?)",
       t.INT, t.INT, {t.CHAR, 120}, {t.CHAR, 60}},
-   nested_loop_join = {
-   	" "
+   nested_loop_joins = {
+   	  "SELECT * FROM sbtest%u, sbtest%u where sbtest%u.id = sbtest%u.id and sbtest%u.k < 50",
    },
 }
 
@@ -290,9 +292,15 @@ function prepare_commit()
 end
 
 function prepare_for_each_table(key)
-   for t = 1, sysbench.opt.tables do
-      stmt[t][key] = con:prepare(string.format(stmt_defs[key][1], t))
+   local t_num = sysbench.opt.tables
 
+   for t = 1, sysbench.opt.tables do
+      if (t<t_num) then
+      	stmt[t][key] = con:prepare(string.format(stmt_defs[key][1], t, t+1, t, t+1, t))
+      else
+	stmt[t][key] = con:prepare(string.format(stmt_defs[key][1], t, 1, t, 1, t))
+      end
+	
       local nparam = #stmt_defs[key] - 1
 
       if nparam > 0 then
@@ -352,6 +360,10 @@ end
 function prepare_delete_inserts()
    prepare_for_each_table("deletes")
    prepare_for_each_table("inserts")
+end
+
+function prepare_nested_loop_joins()
+	prepare_for_each_table("nested_loop_joins")
 end
 
 function thread_init()
@@ -478,6 +490,13 @@ function execute_non_index_updates()
 
       stmt[tnum].non_index_updates:execute()
    end
+end
+
+function execute_nested_loop_joins()
+	local tnum = get_table_num()
+	for i = 1, sysbench.opt.nested_loop_joins do
+		stmt[tnum].nested_loop_joins:execute()
+	end
 end
 
 function execute_delete_inserts()
