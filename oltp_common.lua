@@ -71,8 +71,10 @@ sysbench.cmdline.options = {
    reconnect =
       {"Reconnect after every N events. The default (0) is to not reconnect",
        0},
+   k_value = 
+      {"limit on the k value", 10000},
    nested_loop_joins = 
-      {"Newted Loop Join number", 100},
+      {"Nested Loop Join number", 100},
    mysql_storage_engine =
       {"Storage engine, if MySQL is used", "rocksdb"},
    pgsql_variant =
@@ -278,6 +280,9 @@ local stmt_defs = {
    inserts = {
       "INSERT INTO sbtest%u (id, k, c, pad) VALUES (?, ?, ?, ?)",
       t.INT, t.INT, {t.CHAR, 120}, {t.CHAR, 60}},
+   nested_loop_joins_non_pk = {
+   	  "SELECT * FROM sbtest%u, sbtest%u where sbtest%u.k = sbtest%u.k and sbtest%u.k < 50",
+   },
    nested_loop_joins = {
    	  "SELECT * FROM sbtest%u, sbtest%u where sbtest%u.id = sbtest%u.id and sbtest%u.k < 50",
    },
@@ -360,6 +365,10 @@ end
 function prepare_delete_inserts()
    prepare_for_each_table("deletes")
    prepare_for_each_table("inserts")
+end
+
+function prepare_nested_loop_joins_non_pk()
+	prepare_for_each_table("nested_loop_joins_non_pk")
 end
 
 function prepare_nested_loop_joins()
@@ -492,6 +501,12 @@ function execute_non_index_updates()
    end
 end
 
+function execute_nested_loop_joins_non_pk()
+	local tnum = get_table_num()
+	for i = 1, sysbench.opt.nested_loop_joins_non_pk do
+		stmt[tnum].nested_loop_joins_pk:execute()
+	end
+end
 function execute_nested_loop_joins()
 	local tnum = get_table_num()
 	for i = 1, sysbench.opt.nested_loop_joins do
